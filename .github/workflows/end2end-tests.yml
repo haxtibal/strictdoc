@@ -25,6 +25,12 @@ jobs:
       run: |
         pip install -r requirements.bootstrap.txt
 
+    - name: Setup upterm session
+      uses: lhotari/action-upterm@v1
+      with:
+        ## If no one connects after 5 minutes, shut down server.
+        wait-timeout-minutes: 5
+
     - name: Run end-to-end tasks
       run: |
         tox -e py38-check -- pytest --failed-first --capture=no --reuse-session --exitfirst --strictdoc-long-timeouts -o cache_dir=build/pytest_end2end tests/end2end -k 'edit_grammar_move_field_down'
