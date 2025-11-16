@@ -28,7 +28,7 @@ class SourceNode:
     """
 
     entity_name: Optional[str]
-    comment_byte_range: Optional[ByteRange]
+    comment_byte_range: Optional[ByteRange] = None
     markers: List[Union[FunctionRangeMarker, RangeMarker, LineMarker]] = field(
         default_factory=list
     )
