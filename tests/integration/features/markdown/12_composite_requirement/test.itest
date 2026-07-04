@@ -1,0 +1,19 @@
+#
+# This test verifies that a Markdown custom grammar element declared as
+# **Composite**: True in requirements.gra.md nests the following, deeper headings
+# as its children rather than flat siblings.
+#
+
+RUN: %strictdoc export %S --formats=html --output-dir %T | filecheck %s --dump-input=fail
+CHECK: Published: Compound requirement test
+
+RUN: %cat %T/html/%THIS_TEST_FOLDER/input.html | filecheck %s --dump-input=fail --check-prefix CHECK-HTML
+
+CHECK-HTML: id="COMP-1"
+CHECK-HTML: 1.{{.*}}Parent compound requirement
+
+CHECK-HTML: id="SUB-1"
+CHECK-HTML: 1.1.{{.*}}Sub requirement 1
+
+CHECK-HTML: id="SUB-2"
+CHECK-HTML: 1.2.{{.*}}Sub requirement 2

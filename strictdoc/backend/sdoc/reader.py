@@ -119,6 +119,10 @@ class SDReader:
         return sdoc
 
     @staticmethod
+    def post_grammar_hook(document: SDocDocument) -> None:  # noqa: ARG004
+        return
+
+    @staticmethod
     def fixup_composite_requirements(sdoc: SDocDocument) -> None:
         for _, node_ in enumerate(copy(sdoc.section_contents)):
             if isinstance(node_, SDocCompositeNode):

@@ -38,6 +38,7 @@ from strictdoc.backend.sdoc_source_code.caching_reader import (
 )
 from strictdoc.core.constants import GraphLinkType
 from strictdoc.core.document_iterator import SDocDocumentIterator
+from strictdoc.core.document_reader_registry import DocumentReaderRegistry
 from strictdoc.core.document_tree import DocumentTree
 from strictdoc.core.file_dependency_manager import FileDependencyManager
 from strictdoc.core.file_system.document_finder import DocumentFinder
@@ -449,6 +450,12 @@ class TraceabilityIndexBuilder:
             # normal grammar vs imported grammar, the parent may not be set at
             # this point.
             document.grammar.parent = document
+
+            reader_class = DocumentReaderRegistry.get_reader_class(
+                document.meta.input_doc_full_path
+            )
+            if reader_class is not None:
+                reader_class.post_grammar_hook(document)
 
             try:
                 SDocValidator.validate_document(document)

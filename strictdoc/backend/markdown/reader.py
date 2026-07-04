@@ -22,7 +22,10 @@ from strictdoc.backend.sdoc.models.document_config import (
 )
 from strictdoc.backend.sdoc.models.document_grammar import DocumentGrammar
 from strictdoc.backend.sdoc.models.inline_link import InlineLink
-from strictdoc.backend.sdoc.models.node import SDocNode, SDocNodeField
+from strictdoc.backend.sdoc.models.node import (
+    SDocNode,
+    SDocNodeField,
+)
 from strictdoc.backend.sdoc.models.reference import (
     ChildReqReference,
     FileEntry,
@@ -34,6 +37,7 @@ from strictdoc.backend.sdoc.pickle_cache import PickleCache
 from strictdoc.backend.sdoc_source_code.reader_registry import (
     SourceCodeReaderRegistry,
 )
+from strictdoc.core.document_iterator import SDocDocumentIterator
 from strictdoc.core.project_config import ProjectConfig
 from strictdoc.helpers.cast import assert_cast
 from strictdoc.helpers.mid import MID
@@ -211,6 +215,26 @@ class SDMarkdownReader:
         )
 
         return document
+
+    @staticmethod
+    def post_grammar_hook(document: SDocDocument) -> None:
+        """
+        Set document properties that depend on availability of associated grammar in a late parse-pass.
+        """
+        if document.grammar is None:
+            return
+
+        # Mark composite node instances as such.
+        for node, _ in SDocDocumentIterator(document).all_content():
+            if not isinstance(node, SDocNode) or node.node_type == "SECTION":
+                continue
+            grammar_element = document.grammar.elements_by_type.get(
+                node.node_type
+            )
+            if grammar_element is not None:
+                node.is_composite = (
+                    grammar_element.property_is_composite is True
+                )
 
     @staticmethod
     def _make_new_empty_document(

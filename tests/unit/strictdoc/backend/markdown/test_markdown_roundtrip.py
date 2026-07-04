@@ -2,6 +2,7 @@ from typing import Optional
 
 import pytest
 
+from strictdoc.backend.markdown.grammar_reader import MarkdownGrammarReader
 from strictdoc.backend.markdown.reader import SDMarkdownReader
 from strictdoc.backend.markdown.writer import SDMarkdownWriter
 from strictdoc.backend.sdoc.constants import SDocMarkup
@@ -1111,3 +1112,147 @@ def test_028_section_prefix_with_type_drops_type_on_output():
     assert isinstance(section, SDocNode)
     assert section.node_type == "SECTION"
     assert section.get_prefix() == "LEVEL2-REQ-"
+
+
+def test_029_composite_custom_grammar_element_via_post_grammar_hook():
+    """
+    A custom grammar element declared as composite (**Composite**: True in
+    the grammar, analogous to SDoc's IS_COMPOSITE: True +
+    [[COMPOSITE_REQUIREMENT]] ... [[/COMPOSITE_REQUIREMENT]]) cannot be known
+    at Markdown document parse time: an externally referenced grammar is not
+    resolved until later (MD-9). SDMarkdownReader.post_grammar_hook fixes up
+    is_composite once the grammar becomes available, mirroring the real
+    pipeline step in TraceabilityIndexBuilder.
+    """
+    input_markdown = """\
+# Document title
+
+**Grammar**: `requirements.gra.md`
+
+## Parent compound requirement
+
+**TYPE**: COMPOSITE_REQUIREMENT \\
+**UID**: COMP-1 \\
+**STATEMENT**: Parent statement.
+
+### Sub requirement
+
+**TYPE**: REQUIREMENT \\
+**UID**: SUB-1 \\
+**STATEMENT**: Sub statement.
+"""
+    reader = SDMarkdownReader()
+    document = reader.read(input_markdown, file_path=None)
+
+    parent_node = document.section_contents[0]
+    assert isinstance(parent_node, SDocNode)
+    sub_node = parent_node.section_contents[0]
+    assert isinstance(sub_node, SDocNode)
+
+    # Before the grammar is resolved, is_composite cannot be known yet:
+    # nesting itself is unconditional (heading depth alone), but the node
+    # class/flag defaults to non-composite until the hook runs.
+    assert parent_node.is_composite is False
+    assert sub_node.is_composite is False
+
+    grammar_markdown = """\
+# StrictDoc Markdown Grammar
+
+## Element: COMPOSITE_REQUIREMENT
+
+**Composite**: True
+
+### Field: UID
+
+**Type**: String
+**Required**: False
+
+### Field: STATEMENT
+
+**Type**: String
+**Required**: False
+
+## Element: REQUIREMENT
+
+### Field: UID
+
+**Type**: String
+**Required**: False
+
+### Field: STATEMENT
+
+**Type**: String
+**Required**: False
+"""
+    resolved_grammar = MarkdownGrammarReader.read(grammar_markdown)
+    assert document.grammar is not None
+    document.grammar.update_with_elements(resolved_grammar.elements)
+
+    SDMarkdownReader.post_grammar_hook(document)
+
+    assert parent_node.is_composite is True
+    assert sub_node.is_composite is False
+
+    writer = SDMarkdownWriter()
+    output_markdown = writer.write(document)
+    assert "**Composite**" not in output_markdown
+    assert "**COMPOSITE**" not in output_markdown
+
+    # Re-reading and re-resolving must produce the identical result: the
+    # writer does not persist is_composite in the text, it is always
+    # re-derived fresh from the grammar.
+    document2 = reader.read(output_markdown, file_path=None)
+    document2.grammar.update_with_elements(resolved_grammar.elements)
+    SDMarkdownReader.post_grammar_hook(document2)
+
+    parent_node2 = document2.section_contents[0]
+    assert isinstance(parent_node2, SDocNode)
+    sub_node2 = parent_node2.section_contents[0]
+    assert isinstance(sub_node2, SDocNode)
+    assert parent_node2.is_composite is True
+    assert sub_node2.is_composite is False
+
+
+def test_030_composite_hook_never_downgrades_section():
+    """
+    SECTION is always composite, hardcoded at construction time. A custom
+    grammar that declares SECTION without **Composite**: True must not cause
+    the post_grammar_hook to downgrade an existing SECTION node's
+    is_composite.
+    """
+    input_markdown = """\
+# Document title
+
+**Grammar**: `requirements.gra.md`
+
+## Chapter
+
+**TYPE**: SECTION
+
+Section body text.
+"""
+    reader = SDMarkdownReader()
+    document = reader.read(input_markdown, file_path=None)
+
+    section_node = document.section_contents[0]
+    assert isinstance(section_node, SDocNode)
+    assert section_node.node_type == "SECTION"
+    assert section_node.is_composite is True
+
+    grammar_markdown = """\
+# StrictDoc Markdown Grammar
+
+## Element: SECTION
+
+### Field: TITLE
+
+**Type**: String
+**Required**: True
+"""
+    resolved_grammar = MarkdownGrammarReader.read(grammar_markdown)
+    assert document.grammar is not None
+    document.grammar.update_with_elements(resolved_grammar.elements)
+
+    SDMarkdownReader.post_grammar_hook(document)
+
+    assert section_node.is_composite is True
